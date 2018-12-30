@@ -1,8 +1,10 @@
 import pygame
+from pygame.sprite import Sprite
 
-class Koala():
+class Koala(Sprite):
     def __init__(self, ka_settings, screen):
         """Initialize koala at starting position"""
+        super(Koala, self).__init__()
         self.screen = screen
         self.ka_settings = ka_settings
 
