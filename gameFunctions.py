@@ -53,22 +53,25 @@ def change_fleet_direction(ka_settings, leaves):
         leaf.rect.y += ka_settings.fleet_drop_speed
     ka_settings.fleet_direction *= -1
 
-def update_leaves(ka_settings, stats, screen, koala, leaves, bullets):
+def update_leaves(ka_settings, screen, stats, sb, koala, leaves, bullets):
     """Check if fleet is at edge and update positions of leaves"""
     check_fleet_edges(ka_settings, leaves)
     leaves.update()
 
     #Look for leaf and koala collisions
     if pygame.sprite.spritecollideany(koala, leaves):
-        koala_hit(ka_settings, stats, screen, koala, leaves, bullets)
+        koala_hit(ka_settings, screen, stats, sb, koala, leaves, bullets)
 
     #Look for leaves hitting screen bottom
-        check_leaves_bottom(ka_settings, stats, screen, koala, leaves, bullets)
+        check_leaves_bottom(ka_settings, screen, stats, sb, koala, leaves, bullets)
 
-def koala_hit(ka_settings, stats, screen, koala, leaves, bullets):
+def koala_hit(ka_settings, screen, stats, sb, koala, leaves, bullets):
     if stats.koalas_left > 0:
         """Respond to koala being hit by leaf"""
         stats.koalas_left -= 1
+
+        #Update scoreboard
+        sb.prep_koalas()
 
         #Empty list of leaves and bullets
         leaves.empty()
@@ -82,6 +85,7 @@ def koala_hit(ka_settings, stats, screen, koala, leaves, bullets):
         sleep(0.5)
     else:
         stats.game_active = False
+        pygame.mouse.set_visible(True)
 
 def check_keydown_events(event, ka_settings, screen, koala, bullets):
     if event.key == pygame.K_RIGHT:
@@ -102,14 +106,14 @@ def fire_bullet(ka_settings, screen, koala, bullets):
         new_bullet = Bullet(ka_settings, screen, koala)
         bullets.add(new_bullet)
 
-
 def check_keyup_events(event, koala):
     if event.key == pygame.K_RIGHT:
         koala.moving_right = False
     elif event.key == pygame.K_LEFT:
         koala.moving_left = False
     
-def check_events(ka_settings, screen, koala, bullets):
+def check_events(ka_settings, screen, stats, sb, play_button, koala, leaves,
+                 bullets):
     """Repond to mouse and key presses"""
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -118,9 +122,41 @@ def check_events(ka_settings, screen, koala, bullets):
             check_keydown_events(event, ka_settings, screen, koala, bullets)
         elif event.type == pygame.KEYUP:
             check_keyup_events(event, koala)
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            check_play_button(ka_settings, screen, stats, sb, play_button, koala,
+                      leaves, bullets, mouse_x, mouse_y)
 
-    
-def update_bullets(ka_settings, screen, koala, leaves, bullets):
+def check_play_button(ka_settings, screen, stats, sb, play_button, koala,
+                      leaves, bullets, mouse_x, mouse_y):
+    """Start new game when button pressed"""
+    button_clicked = play_button.rect.collidepoint(mouse_x, mouse_y)
+    if button_clicked and not stats.game_active:
+        #Reset game settings
+        ka_settings.initialize_dynamic_settings()
+        
+        #Hide mouse cursor
+        pygame.mouse.set_visible(False)
+
+        #Reset game stats
+        stats.reset_stats()
+        stats.game_active = True
+
+        #Reset scoreboard
+        sb.prep_score()
+        sb.prep_high_score()
+        sb.prep_level()
+        sb.prep_koalas()
+
+        #Empty lists
+        leaves.empty()
+        bullets.empty()
+
+        #Create new fleet and center koala
+        create_fleet(ka_settings, screen, koala, leaves)
+        koala.center_koala()
+
+def update_bullets(ka_settings, screen, stats, sb, koala, leaves, bullets):
     """Update position of bullets and gets rid of old bullets"""
     #Update bullet position
     bullets.update()
@@ -130,26 +166,46 @@ def update_bullets(ka_settings, screen, koala, leaves, bullets):
         if bullet.rect.bottom <= 0:
             bullets.remove(bullet)
 
-    check_bullet_leaf_collisions(ka_settings, screen, koala, leaves, bullets)
+    check_bullet_leaf_collisions(ka_settings, screen, stats, sb,
+                                 koala, leaves, bullets)
 
-def check_bullet_leaf_collisions(ka_settings, screen, koala, leaves, bullets):
+def check_bullet_leaf_collisions(ka_settings, screen, stats, sb,
+                                 koala, leaves, bullets):
     #Checks if bullet has hit leaf
     collisions = pygame.sprite.groupcollide(bullets, leaves, True, True)
+
+    if collisions:
+        for leaves in collisions.values():
+            stats.score += ka_settings.leaf_points * len(leaves)
+            sb.prep_score()
+        check_high_score(stats, sb)
 
     if len(leaves) == 0:
         #Destroy existing bullets and create new fleet
         bullets.empty()
+        ka_settings.increase_speed()
         create_fleet(ka_settings, screen, koala, leaves)
 
-def check_leaves_bottom(ka_settings, stats, screen, koala, leaves, bullets):
+        #Increase level
+        stats.level += 1
+        sb.prep_level()
+
+def check_leaves_bottom(ka_settings, screen, stats, sb, koala, leaves, bullets):
     """Check if leaves have reached screen bottom"""
     screen_rect = screen.get_rect()
     for leaf in leaves.sprites():
         if leaf.rect.bottom >= screen_rect.bottom:
-            koala_hit(ka_settings, stats, screen, koala, leaves, bullets)
+            koala_hit(ka_settings, screen, stats, sb, koala, leaves, bullets)
             break
+
+def check_high_score(stats, sb):
+    """Check if there is new high score"""
+    if stats.score > stats.high_score:
+        stats.high_score = stats.score
+        sb.prep_high_score()
             
-def update_screen(ka_settings, screen, koala, leaves, bullets):
+def update_screen(ka_settings, screen, stats, sb, koala, leaves, bullets,
+                  play_button):
         #Redraw screen
         screen.fill(ka_settings.bg_colour)
         #Redraw bullets behind koalas and leaves
@@ -157,6 +213,12 @@ def update_screen(ka_settings, screen, koala, leaves, bullets):
             bullet.draw_bullet()
         koala.blitme()
         leaves.draw(screen)
+
+        #Draw score info
+        sb.show_score()
         
+        #Draw play button when game inactive
+        if not stats.game_active:
+            play_button.draw_button()
         #Show drawn screen
         pygame.display.flip()
