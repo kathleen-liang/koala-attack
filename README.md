@@ -1,6 +1,6 @@
 # Koala Attack
 
-Koala Attack is a game of a koala shooting bullets at eucalyptus leaves. It was created using Python and Pygame.
+Based off of the classic Alien Invasion game, Koala Attack features a koala shooting bullets at eucalyptus leaves. It was created using Python and Pygame.
 
 
 ## Contributing
